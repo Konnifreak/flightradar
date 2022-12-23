@@ -1,8 +1,6 @@
-import requests
 import json
 import paho.mqtt.client as mqtt
 import time
-import sys
 import dotenv
 import sqlite3
 from math import sqrt
@@ -25,8 +23,7 @@ class mqtt_flight:
     def publish_device(self, device_id, device_name, device_type, device_manufacturer, device_model):
         device_payload = {
             "name": device_name,
-            "identifiers": "test123",
-            #"type": device_type,
+            "identifiers": "test123", #Rename
             "manufacturer": device_manufacturer,
             "model": device_model,
         }
@@ -39,7 +36,6 @@ class mqtt_flight:
         sensor_payload = {
             "dev": self.device,
             "name": sensor_name,
-            #"stat_cla": sensor_type,
             "uniq_id": sensor_id,
             "stat_t": f"homeassistant/sensor/{sensor_id}/state",
         }
