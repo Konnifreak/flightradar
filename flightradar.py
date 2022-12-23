@@ -132,7 +132,15 @@ if __name__ == '__main__':
     config = inital_env()
     sky = opensky(config["LAMAX"],config["LAMIN"],config["LOMAX"],config["LOMIN"])
     db_handler = DBHandler('plane_data.db')
+    mqtt_client = mqtt("", "opensky_script")
+    device_id = "nearest_plane"
+    device_name = "Nearest Plane"
+    device_type = "plane"
+    device_manufacturer = "OpenSky Network"
+    device_model = "N/A"
 
+    mqtt_client.publish_device(device_id, device_name, device_type, device_manufacturer, device_model)
+    
 
     while True:
         result = sky.get_planes_area()
@@ -143,24 +151,7 @@ if __name__ == '__main__':
             print(nearest_icao24)
             test = sky.get_details(nearest_icao24)
             db_handler.write_nearest_plane(nearest_icao24, [50.955322, 6.903259])
+            mqtt_client.publish_data("nearest_plane", "callsign", nearest_icao24)
         else:
             print("no Plane :(")
         time.sleep(60)
-
-    """mqtt_client = mqtt("mqtt://localhost", "opensky_script")"""
-
-    """device_id = "nearest_plane"
-    device_name = "Nearest Plane"
-    device_type = "plane"
-    device_manufacturer = "OpenSky Network"
-    device_model = "N/A"
-
-    mqtt_client.publish_device(device_id, device_name, device_type, device_manufacturer, device_model)
-    """
-
-    """device_id = "nearest_plane"
-    sensor_id = "callsign"
-    value = "N12345"
-
-    mqtt_client.publish_data(device_id, sensor_id, value)
-    """
