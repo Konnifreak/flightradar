@@ -32,9 +32,17 @@ class mqtt_flight:
         self.client.publish(device_topic, json.dumps(device_payload),qos = 2, retain=True)
 
 
-    def publish_sensor(self, device_id, sensor_id, sensor_name, sensor_type, sensor_unit):
+    def publish_sensor(self, device_id, device_manufacturer, device_name, device_model, sensor_id, sensor_name):
+
+        device_payload = {
+            "name": device_name,
+            "identifiers": device_id, 
+            "manufacturer": device_manufacturer,
+            "model": device_model,
+        }
+
         sensor_payload = {
-            "dev": self.device,
+            "dev": device_payload ,
             "name": sensor_name,
             "uniq_id": sensor_id,
             "stat_t": f"homeassistant/sensor/{sensor_id}/state",
@@ -148,10 +156,13 @@ if __name__ == '__main__':
     device_type = "None"
     device_manufacturer = "OpenSky Network"
     device_model = "N/A"
+    sensor_id = device_id + "_" + "callsign"
 
-    mqtt_client.publish_device(device_id, device_name, device_type, device_manufacturer, device_model)
-    sensor = mqtt_client.publish_sensor(device_id, "test_id", "callsign", "None", "text")
-    print(sensor)    
+    #mqtt_client.publish_device(device_id, device_name, device_type, device_manufacturer, device_model)
+
+    #publish_sensor(self, device_id, device_manufacturer, device_name, device_model, sensor_id, sensor_name):
+
+    mqtt_client.publish_sensor(device_id, device_manufacturer, device_name, device_model, sensor_id, "callsign")
 
     while True:
         result = sky.get_planes_area()
@@ -162,7 +173,7 @@ if __name__ == '__main__':
             print(nearest_icao24)
             test = sky.get_details(nearest_icao24)
             db_handler.write_nearest_plane(nearest_icao24, [50.955322, 6.903259])
-            test2 = mqtt_client.publish_data(device_id, "test_id", nearest_icao24)
+            test2 = mqtt_client.publish_data(device_id, sensor_id, nearest_icao24)
             print(test2)
         else:
             print("no Plane :(")
