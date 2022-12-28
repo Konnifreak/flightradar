@@ -8,17 +8,38 @@ from FlightRadar24.api import FlightRadar24API
 
 class mqtt_flight:
     def __init__(self, mqtt_server, mqtt_client_id):
+        
+        self.mqtt_server = mqtt_server
+        self.mqtt_client_id = mqtt_client_id
+        self.connected = False
+        self.disconnect=False
+        self.client = mqtt.Client(client_id=self.mqtt_client_id)
+    
+    def mqtt_connect(self,client):
         def on_connect(client, userdata, flags, rc):
             if rc == 0:
                 print("Connected to MQTT Broker!")
+                self.connected = True
+                self.disconnect=False
             else:
                 print("Failed to connect, return code %d\n", rc)
-        self.mqtt_server = mqtt_server
-        self.mqtt_client_id = mqtt_client_id
-        self.client = mqtt.Client(client_id=self.mqtt_client_id)
+                self.connected = False
+
+        def on_disconnect(client, userdata, rc):
+            logging.info("disconnecting reason  "  +str(rc))
+            self.connected=False
+            self.disconnect=True
+        
         self.client.on_connect = on_connect
-        self.client.connect(self.mqtt_server)
-        self.client.loop_start()
+        self.client.on_disconnect = on_disconnect
+        try:
+            self.client.connect(self.mqtt_server)
+            if self.connected:
+                self.client.loop_start()
+        except:
+            self.connected = False
+            print("MQTT Error run without MQTT Connection")
+
 
     def publish_device(self, device_id, device_name, device_type, device_manufacturer, device_model):
         device_payload = {
@@ -32,7 +53,7 @@ class mqtt_flight:
         self.client.publish(device_topic, json.dumps(device_payload),qos = 2, retain=True)
 
 
-    def publish_sensor(self, device_id, device_manufacturer, device_name, device_model, sensor_id, sensor_name):
+    def publish_sensor(self, device_id, device_manufacturer, device_name, device_model, sensors):
 
         device_payload = {
             "name": device_name,
@@ -40,19 +61,21 @@ class mqtt_flight:
             "manufacturer": device_manufacturer,
             "model": device_model,
         }
+        for sensor in sensors:
+            sensor_payload = {
+                "dev": device_payload ,
+                "name": sensor,
+                "uniq_id": device_id + "_" + sensor,
+                "stat_t": f"homeassistant/sensor/{sensor}/state",
+            }
+            sensor_topic = f"homeassistant/sensor/{sensor}/config"
+            self.client.publish(sensor_topic, json.dumps(sensor_payload),qos = 2,retain = True)
 
-        sensor_payload = {
-            "dev": device_payload ,
-            "name": sensor_name,
-            "uniq_id": sensor_id,
-            "stat_t": f"homeassistant/sensor/{sensor_id}/state",
-        }
-        sensor_topic = f"homeassistant/sensor/{sensor_id}/config"
-        return self.client.publish(sensor_topic, json.dumps(sensor_payload),qos = 2,retain = True)
-
-    def publish_data(self, device_id, sensor_id, value):
-        data_topic = f"homeassistant/sensor/{sensor_id}/state"
-        return self.client.publish(data_topic, str(value),qos = 0,retain = True)
+    def publish_data(self, device_id, sensors, data):
+        
+        for i in range(0, len(sensors) -1):
+            data_topic = f"homeassistant/sensor/{sensors[i]}/state"
+            self.client.publish(data_topic, str(data[i]),qos = 0,retain = True)
 
 class opensky:
     def __init__(self,LAMAX,LAMIN,LOMAX,LOMIN):
@@ -63,8 +86,6 @@ class opensky:
         self.lomin = LOMIN
         self.coords = [LAMAX,LAMIN,LOMIN,LOMAX]
         self.fr_api = FlightRadar24API()
-        self.airlines = self.fr_api.get_airlines()
-        self.airports = self.fr_api.get_airports()
 
     def get_timestamp(self,offset):
         plane_time = time.time() - offset
@@ -153,28 +174,31 @@ if __name__ == '__main__':
 
     device_id = "nearest_plane"
     device_name = "Nearest Plane"
-    device_type = "None"
-    device_manufacturer = "OpenSky Network"
+    device_manufacturer = "Flightradar24"
     device_model = "N/A"
-    sensor_id = device_id + "_" + "callsign"
-
-    #mqtt_client.publish_device(device_id, device_name, device_type, device_manufacturer, device_model)
-
-    #publish_sensor(self, device_id, device_manufacturer, device_name, device_model, sensor_id, sensor_name):
-
-    mqtt_client.publish_sensor(device_id, device_manufacturer, device_name, device_model, sensor_id, "callsign")
+    sensors = ["callsign", "airline_name" , "airport_orgin" , "airport_dest" ,"aircraft" ]
+    data = []
+    mqtt_client.mqtt_connect(mqtt_client.client)
+    if mqtt_client.connected:
+        mqtt_client.publish_sensor(device_id, device_manufacturer, device_name, device_model, sensors)
 
     while True:
         result = sky.get_planes_area()
+
         if result is not None:
             print("Plane :)")
             db_handler.write_all_planes(sky.plane_data)
+
             nearest_icao24 = closest_coordinates(sky.plane_data, [50.955322, 6.903259])
-            print(nearest_icao24)
             test = sky.get_details(nearest_icao24)
+
+            data = [test.get("identification", {}).get("callsign", "N/A"), test.get("airline",{}).get("name", "N/A"), test.get("airport",{}).get("origin",{}).get("name", "N/A"), test.get("airport",{}).get("destination",{}).get("name", "N/A"), test.get("aircraft",{}).get("model",{}).get("text", "N/A")]
+            print(data[0] + " von " + data[1] + " fliegt von " + data[2] + " nach "+ data[3] + " mit einem Flugzeug der Klasse: " + data[4])
+
             db_handler.write_nearest_plane(nearest_icao24, [50.955322, 6.903259])
-            test2 = mqtt_client.publish_data(device_id, sensor_id, nearest_icao24)
-            print(test2)
+            if mqtt_client.connected and not mqtt_client.disconnect:
+                mqtt_client.publish_data(device_id, sensors, data)
+  
         else:
             print("no Plane :(")
         time.sleep(60)
