@@ -14,6 +14,31 @@ class mqtt_flight:
         self.connected = False
         self.disconnect=False
         self.client = mqtt.Client(client_id=self.mqtt_client_id)
+        def on_connect(client, userdata, flags, rc):
+            if rc == 0:
+                print("Connected to MQTT Broker!")
+                self.connected = True
+                self.disconnect=False
+            else:
+                print("Failed to connect, return code %d\n", rc)
+                self.connected = False
+
+        def on_disconnect(client, userdata, rc):
+            print("disconnecting reason  "  +str(rc))
+            self.connected=False
+            self.disconnect=True
+        
+        self.client.on_connect = on_connect
+        self.client.on_disconnect = on_disconnect
+        
+        try:
+            print(self.client.connect(self.mqtt_server))
+            self.connected = True
+            if self.connected:
+                self.client.loop_start()
+        except:
+            self.connected = False
+            print("MQTT Error run without MQTT Connection")
     
     def mqtt_connect(self,client):
         def on_connect(client, userdata, flags, rc):
@@ -26,14 +51,16 @@ class mqtt_flight:
                 self.connected = False
 
         def on_disconnect(client, userdata, rc):
-            logging.info("disconnecting reason  "  +str(rc))
+            print("disconnecting reason  "  +str(rc))
             self.connected=False
             self.disconnect=True
         
         self.client.on_connect = on_connect
         self.client.on_disconnect = on_disconnect
+        
         try:
-            self.client.connect(self.mqtt_server)
+            print(self.client.connect(self.mqtt_server))
+            self.connected = True
             if self.connected:
                 self.client.loop_start()
         except:
@@ -69,11 +96,10 @@ class mqtt_flight:
                 "stat_t": f"homeassistant/sensor/{sensor}/state",
             }
             sensor_topic = f"homeassistant/sensor/{sensor}/config"
-            self.client.publish(sensor_topic, json.dumps(sensor_payload),qos = 2,retain = True)
+            print(self.client.publish(sensor_topic, json.dumps(sensor_payload),qos = 2,retain = True))
 
     def publish_data(self, device_id, sensors, data):
-        
-        for i in range(0, len(sensors) -1):
+        for i in range(0, len(sensors)  ):
             data_topic = f"homeassistant/sensor/{sensors[i]}/state"
             self.client.publish(data_topic, str(data[i]),qos = 0,retain = True)
 
@@ -170,7 +196,7 @@ if __name__ == '__main__':
     config = inital_env()
     sky = opensky(config["LAMAX"],config["LAMIN"],config["LOMAX"],config["LOMIN"])
     db_handler = DBHandler('plane_data.db')
-    mqtt_client = mqtt_flight(config["MQTT_SERVER"], "opensky_script")
+    mqtt_client = mqtt_flight(config["MQTT_SERVER"], "flightradar_script")
 
     device_id = "nearest_plane"
     device_name = "Nearest Plane"
@@ -178,7 +204,7 @@ if __name__ == '__main__':
     device_model = "N/A"
     sensors = ["callsign", "airline_name" , "airport_orgin" , "airport_dest" ,"aircraft" ]
     data = []
-    mqtt_client.mqtt_connect(mqtt_client.client)
+    #mqtt_client.mqtt_connect(mqtt_client.client)
     if mqtt_client.connected:
         mqtt_client.publish_sensor(device_id, device_manufacturer, device_name, device_model, sensors)
 
