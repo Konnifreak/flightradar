@@ -1,0 +1,7 @@
+paho.mqtt
+time
+dotenv
+sqlite3
+math
+json
+FlightRadarAPI
