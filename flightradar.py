@@ -3,6 +3,7 @@ import paho.mqtt.client as mqtt
 import time
 import dotenv
 import sqlite3
+import logging
 from math import sqrt
 from FlightRadar24.api import FlightRadar24API
 
@@ -43,15 +44,15 @@ class mqtt_flight:
         self.client = mqtt.Client(client_id=self.mqtt_client_id)
         def on_connect(client, userdata, flags, rc):
             if rc == 0:
-                print("Connected to MQTT Broker!")
+                logging.warning("Connected to MQTT Broker!")
                 self.connected = True
                 self.disconnect=False
             else:
-                print("Failed to connect, return code %d\n", rc)
+                logging.warning("Failed to connect, return code %d\n", rc)
                 self.connected = False
 
         def on_disconnect(client, userdata, rc):
-            print("disconnecting reason  "  +str(rc))
+            logging.warning("disconnecting reason  "  +str(rc))
             self.connected=False
             self.disconnect=True
         
@@ -59,13 +60,13 @@ class mqtt_flight:
         self.client.on_disconnect = on_disconnect
         
         try:
-            print(self.client.connect(self.mqtt_server))
+            logging.warning(self.client.connect(self.mqtt_server))
             self.connected = True
             if self.connected:
                 self.client.loop_start()
         except:
             self.connected = False
-            print("MQTT Error run without MQTT Connection")
+            logging.warning("MQTT Error run without MQTT Connection")
     
 
     def publish_sensor(self, device_id, device_manufacturer, device_name, device_model, sensors):
@@ -86,9 +87,9 @@ class mqtt_flight:
             sensor_topic = f"homeassistant/sensor/{sensor}/config"
             publish_check = self.client.publish(sensor_topic, json.dumps(sensor_payload),qos = 2,retain = True)
             if publish_check[0] == 0:
-                print("Sensor: " + sensor + " wurde erfolgreich gepublished")
+                logging.warning("Sensor: " + sensor + " wurde erfolgreich gepublished")
             else:
-                print("Sensor: " + sensor + " publish fehlgeschlagen")
+                logging.warning("Sensor: " + sensor + " publish fehlgeschlagen")
 
 
     def publish_data(self, device_id, sensors, data):
@@ -144,7 +145,8 @@ class flightradar:
         try:
             plane_data_all = self.fr_api.get_flights(bounds=",".join(self.coords))
         except:
-            print("Connection not possible")
+            logging.warning("Connection not possible")
+            plane_data_all = []
         plane_data_temp = []
         if not plane_data_all:
             return None
@@ -260,12 +262,12 @@ if __name__ == '__main__':
             closest = sky.get_details(nearest_icao24)
 
             data = [(closest.get("identification", {}) or {}).get("callsign", "N/A"), (closest.get("airline",{}) or {}).get("name", "N/A"), ((closest.get("airport",{})or {}).get("origin",{})or {}).get("name", "N/A"), ((closest.get("airport",{})or {}).get("destination",{})or {}).get("name", "N/A"), ((closest.get("aircraft",{})or {}).get("model",{})or {}).get("text", "N/A")]
-            print(data[0] + " von " + data[1] + " fliegt von " + data[2] + " nach "+ data[3] + " mit einem Flugzeug der Klasse: " + data[4])
+            logging.warning(data[0] + " von " + data[1] + " fliegt von " + data[2] + " nach "+ data[3] + " mit einem Flugzeug der Klasse: " + data[4])
 
             db_handler.write_nearest_plane(data)
             if mqtt_client.connected and not mqtt_client.disconnect:
                 mqtt_client.publish_data(device_id, sensors, data)
   
         else:
-            print("no Plane found in Area")
+            logging.warning("no Plane found in Area")
         time.sleep(60)
